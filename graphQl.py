@@ -1,7 +1,7 @@
 import requests
 import time
 
-TOKEN = "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"
+TOKEN = "PERSONAL_ACCESS_TOKEN"  # Replace with your actual token
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",

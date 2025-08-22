@@ -1,7 +1,7 @@
 import requests
 import time
 
-token = "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"
+token = "PERSONAL_ACCESS_TOKEN"  # Replace with your actual token
 
 def get_popular_repositories(keyword, total_repos=100):
     repos = []
