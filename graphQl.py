@@ -1,7 +1,7 @@
 import requests
 import time
 
-TOKEN = "PERSONAL_ACCESS_TOKEN"  # Replace with your actual token
+TOKEN = "PERSONAL_TOKEN"  # Replace with your actual token
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",

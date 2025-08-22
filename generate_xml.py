@@ -3,7 +3,7 @@ import time
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
-TOKEN = "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"
+TOKEN = "PERSONAL_TOKEN"  # Replace with your actual token
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",
