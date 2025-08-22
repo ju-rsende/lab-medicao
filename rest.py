@@ -1,17 +1,28 @@
 import requests
 import time
 
-token = "PERSONAL_TOKEN"
+token = "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"
 
-def get_popular_repositories(keyword):
-    url = f"https://api.github.com/search/repositories?q={keyword}&sort=stars&order=desc&page=1"
-    headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()["items"]
-    else:
-        print(f"Error: {response.status_code}")
-        return []
+def get_popular_repositories(keyword, total_repos=100):
+    repos = []
+    page = 1
+    per_page = 100
+    
+    while len(repos) < total_repos:
+        url = f"https://api.github.com/search/repositories?q={keyword}&sort=stars&order=desc&page={page}&per_page={per_page}"
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            items = response.json()["items"]
+            if not items:
+                break
+            repos.extend(items)
+            page += 1
+        else:
+            print(f"Error: {response.status_code}")
+            break
+    
+    return repos[:total_repos]
 
 
 def get_repository_details(owner, repo):
@@ -168,15 +179,11 @@ def collect_and_print_repo_data(repos):
 
         print("-" * 40)
 
-def requisicao_automatica(intervalo_segundos=60):
-    keyword = "open-source"
-    while True:
-        repos = get_popular_repositories(keyword)
-        if repos:
-            collect_and_print_repo_data(repos)
-        else:
-            print("Nenhum repositório encontrado.")
-        time.sleep(intervalo_segundos)
-
 if __name__ == "__main__":
-    requisicao_automatica()
+    keyword = "stars:>1"
+    repos = get_popular_repositories(keyword, 100)
+    if repos:
+        print(f"Coletando dados de {len(repos)} repositórios...")
+        collect_and_print_repo_data(repos)
+    else:
+        print("Nenhum repositório encontrado.")

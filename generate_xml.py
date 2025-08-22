@@ -1,5 +1,7 @@
 import requests
 import time
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 TOKEN = "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"
 
@@ -84,8 +86,14 @@ def get_repo_details(owner, name):
     result = run_query(query, variables)
     return result["data"]["repository"]
 
-def collect_and_print_repo_data():
+def collect_and_generate_xml():
     repos = get_top_repo_ids(100)
+    
+    # Criar elemento raiz
+    root = ET.Element("repositories")
+    root.set("total", str(len(repos)))
+    root.set("generated_at", time.strftime("%Y-%m-%d %H:%M:%S"))
+    
     for repo in repos:
         details = get_repo_details(repo["owner"]["login"], repo["name"])
         primary_language = details['primaryLanguage']['name'] if details['primaryLanguage'] else 'Unknown'
@@ -93,20 +101,36 @@ def collect_and_print_repo_data():
         closed_issues = details['closedIssues']['totalCount']
         total_issues = open_issues + closed_issues
         closed_ratio = (closed_issues / total_issues) if total_issues > 0 else 0
-
-        print(f"Repository: {repo['owner']['login']}/{repo['name']}")
-        print(f"Stars: {details['stargazerCount']}")
-        print(f"Repository Age: {details['createdAt']}")
-        print(f"Last Updated: {details['updatedAt']}")
-        print(f"Primary Language: {primary_language}")
-        print(f"Releases: {details['releases']['totalCount']}")
-        print(f"Open Issues: {open_issues}")
-        print(f"Closed Issues: {closed_issues}")
-        print(f"Closed Issues Ratio: {closed_ratio:.2f}")
-        print(f"Merged Pull Requests: {details['pullRequests']['totalCount']}")
-        print("-" * 40)
+        
+        # Criar elemento repositório
+        repo_elem = ET.SubElement(root, "repository")
+        
+        ET.SubElement(repo_elem, "name").text = f"{repo['owner']['login']}/{repo['name']}"
+        ET.SubElement(repo_elem, "owner").text = repo['owner']['login']
+        ET.SubElement(repo_elem, "repo_name").text = repo['name']
+        ET.SubElement(repo_elem, "stars").text = str(details['stargazerCount'])
+        ET.SubElement(repo_elem, "created_at").text = details['createdAt']
+        ET.SubElement(repo_elem, "updated_at").text = details['updatedAt']
+        ET.SubElement(repo_elem, "primary_language").text = primary_language
+        ET.SubElement(repo_elem, "releases").text = str(details['releases']['totalCount'])
+        ET.SubElement(repo_elem, "open_issues").text = str(open_issues)
+        ET.SubElement(repo_elem, "closed_issues").text = str(closed_issues)
+        ET.SubElement(repo_elem, "closed_issues_ratio").text = f"{closed_ratio:.2f}"
+        ET.SubElement(repo_elem, "merged_pull_requests").text = str(details['pullRequests']['totalCount'])
+        
+        print(f"Processado: {repo['owner']['login']}/{repo['name']}")
+    
+    # Formatar XML
+    xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent="  ")
+    
+    # Salvar arquivo
+    with open("github_repositories.xml", "w", encoding="utf-8") as f:
+        f.write(xml_str)
+    
+    print(f"\nArquivo XML gerado: github_repositories.xml")
+    return root
 
 if __name__ == "__main__":
     start_time = time.time()
-    collect_and_print_repo_data()
+    collect_and_generate_xml()
     print(f"Tempo total de execução: {time.time() - start_time:.2f} segundos")
