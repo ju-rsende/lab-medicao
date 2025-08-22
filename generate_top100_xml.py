@@ -87,7 +87,7 @@ def get_repo_details(owner, name):
     return result["data"]["repository"]
 
 def collect_and_generate_xml():
-    repos = get_top_repo_ids(1000)
+    repos = get_top_repo_ids(100)
     
     # Criar elemento raiz
     root = ET.Element("repositories")
@@ -124,10 +124,10 @@ def collect_and_generate_xml():
     xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent="  ")
     
     # Salvar arquivo
-    with open("github_repositories.xml", "w", encoding="utf-8") as f:
+    with open("top_100_repositories.xml", "w", encoding="utf-8") as f:
         f.write(xml_str)
     
-    print(f"\nArquivo XML gerado: github_repositories.xml")
+    print(f"\nArquivo XML gerado: top_100_repositories.xml")
     return root
 
 if __name__ == "__main__":
