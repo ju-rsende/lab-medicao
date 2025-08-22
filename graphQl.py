@@ -1,189 +1,112 @@
 import requests
 import time
 
-token = "PERSONAL_ACCESS_TOKEN"  # Replace with your actual token
+TOKEN = "PERSONAL_ACCESS_TOKEN"  # Replace with your actual token
 
-def get_popular_repositories(keyword, total_repos=100):
-    repos = []
-    page = 1
-    per_page = 100
-    
-    while len(repos) < total_repos:
-        url = f"https://api.github.com/search/repositories?q={keyword}&sort=stars&order=desc&page={page}&per_page={per_page}"
-        headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(url, headers=headers)
+HEADERS = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Content-Type": "application/json"
+}
+URL = "https://api.github.com/graphql"
+
+def run_query(query, variables=None, retries=3):
+    payload = {"query": query}
+    if variables:
+        payload["variables"] = variables
+
+    for attempt in range(retries):
+        response = requests.post(URL, json=payload, headers=HEADERS)
         if response.status_code == 200:
-            items = response.json()["items"]
-            if not items:
-                break
-            repos.extend(items)
-            page += 1
+            data = response.json()
+            if "errors" in data:
+                raise Exception(f"GraphQL errors: {data['errors']}")
+            return data
+        elif response.status_code in [502, 503, 504]:
+            print(f"Erro {response.status_code}, tentando novamente ({attempt+1}/{retries})...")
+            time.sleep(5)
         else:
-            print(f"Error: {response.status_code}")
+            raise Exception(f"Query failed: {response.status_code} {response.text}")
+
+    raise Exception(f"Query failed after {retries} attempts")
+
+def get_top_repo_ids(total_repos=100):
+    repos = []
+    cursor = None
+    per_page = 100
+
+    while len(repos) < total_repos:
+        query = """
+        query($cursor: String, $perPage: Int!) {
+          search(query: "stars:>1 sort:stars-desc is:public", type: REPOSITORY, first: $perPage, after: $cursor) {
+            pageInfo { endCursor hasNextPage }
+            edges {
+              node {
+                ... on Repository {
+                  name
+                  owner { login }
+                }
+              }
+            }
+          }
+        }
+        """
+        variables = {"cursor": cursor, "perPage": per_page}
+        result = run_query(query, variables)
+        search = result["data"]["search"]
+
+        for edge in search["edges"]:
+            repos.append(edge["node"])
+            if len(repos) >= total_repos:
+                break
+
+        if not search["pageInfo"]["hasNextPage"]:
             break
-    
+        cursor = search["pageInfo"]["endCursor"]
+
     return repos[:total_repos]
 
+def get_repo_details(owner, name):
+    query = """
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        stargazerCount
+        createdAt
+        updatedAt
+        primaryLanguage { name }
+        releases { totalCount }
+        issues(states: OPEN) { totalCount }
+        closedIssues: issues(states: CLOSED) { totalCount }
+        pullRequests(states: MERGED) { totalCount }
+      }
+    }
+    """
+    variables = {"owner": owner, "name": name}
+    result = run_query(query, variables)
+    return result["data"]["repository"]
 
-def get_repository_details(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        raise Exception(f"Error: {response.status_code}")
-
-
-def get_pull_requests(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}/pulls?state=closed"
-    headers = {"Authorization": f"Bearer {token}"}
-    page = 1
-    merged_count = 0
-    while True:
-        response = requests.get(f"{url}&page={page}&per_page=100", headers=headers)
-        if response.status_code == 200:
-            pull_requests = response.json()
-            if not pull_requests:
-                break
-            for pr in pull_requests:
-                # Buscar detalhes do PR para verificar se foi mesclado
-                pr_url = pr["url"]
-                pr_response = requests.get(pr_url, headers=headers)
-                if pr_response.status_code == 200:
-                    pr_details = pr_response.json()
-                    if pr_details.get("merged_at"):
-                        merged_count += 1
-            page += 1
-        else:
-            raise Exception(f"Error: {response.status_code}")
-    return merged_count
-
-def get_releases(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}/releases"
-    headers = {"Authorization": f"Bearer {token}"}
-    page = 1
-    releases = []
-    while True:
-        response = requests.get(f"{url}?page={page}&per_page=100", headers=headers)
-        if response.status_code == 200:
-            page_releases = response.json()
-            if not page_releases:
-                break
-            releases.extend(page_releases)
-            page += 1
-        else:
-            raise Exception(f"Error: {response.status_code}")
-    return len(releases)
-
-def get_issues(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues?state=open"
-    headers = {"Authorization": f"Bearer {token}"}
-    page = 1
-    issues = []
-    while True:
-        response = requests.get(f"{url}&page={page}&per_page=100", headers=headers)
-        if response.status_code == 200:
-            page_issues = response.json()
-            if not page_issues:
-                break
-            issues.extend(page_issues)
-            page += 1
-        else:
-            raise Exception(f"Error: {response.status_code}")
-    return len(issues)
-
-def get_clossed_issues(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}/issues?state=closed"
-    headers = {"Authorization": f"Bearer {token}"}
-    page = 1
-    closed_issues = []
-    while True:
-        response = requests.get(f"{url}&page={page}&per_page=100", headers=headers)
-        if response.status_code == 200:
-            page_closed_issues = response.json()
-            if not page_closed_issues:
-                break
-            closed_issues.extend(page_closed_issues)
-            page += 1
-        else:
-            raise Exception(f"Error: {response.status_code}")
-    return len(closed_issues)
-
-def get_repository_age(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        repo_data = response.json()
-        created_at = repo_data["created_at"]
-        return created_at
-    else:
-        raise Exception(f"Error: {response.status_code}")
-
-def get_last_updated(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        repo_data = response.json()
-        updated_at = repo_data["updated_at"]
-        return updated_at
-    else:
-        raise Exception(f"Error: {response.status_code}")
-
-def get_primary_language(owner, repo):
-    url = f"https://api.github.com/repos/{owner}/{repo}"
-    headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        repo_data = response.json()
-        primary_language = repo_data.get("language", "Unknown")
-        return primary_language
-    else:
-        raise Exception(f"Error: {response.status_code}")
-
-def collect_and_print_repo_data(repos):
+def collect_and_print_repo_data():
+    repos = get_top_repo_ids(100)
     for repo in repos:
-        owner = repo["owner"]["login"]
-        repo_name = repo["name"]
-        print(f"Repository: {owner}/{repo_name}")
+        details = get_repo_details(repo["owner"]["login"], repo["name"])
+        primary_language = details['primaryLanguage']['name'] if details['primaryLanguage'] else 'Unknown'
+        open_issues = details['issues']['totalCount']
+        closed_issues = details['closedIssues']['totalCount']
+        total_issues = open_issues + closed_issues
+        closed_ratio = (closed_issues / total_issues) if total_issues > 0 else 0
 
-        try:
-            details = get_repository_details(owner, repo_name)
-            print(f"Stars: {details['stargazers_count']}, Forks: {details['forks_count']}, Open Issues: {details['open_issues_count']}")
-
-            pull_requests_count = get_pull_requests(owner, repo_name)
-            print(f"Pull Requests: {pull_requests_count}")
-
-            releases_count = get_releases(owner, repo_name)
-            print(f"Releases: {releases_count}")
-
-            closed_issues_count = get_clossed_issues(owner, repo_name)
-            print(f"Closed Issues: {closed_issues_count}")
-
-            open_issues_count = get_issues(owner, repo_name)
-            print(f"Open Issues: {open_issues_count}")
-
-            repo_age = get_repository_age(owner, repo_name)
-            print(f"Repository Age: {repo_age}")
-
-            last_updated = get_last_updated(owner, repo_name)
-            print(f"Last Updated: {last_updated}")
-
-            primary_language = get_primary_language(owner, repo_name)
-            print(f"Primary Language: {primary_language}")
-
-        except Exception as e:
-            print(e)
-
+        print(f"Repository: {repo['owner']['login']}/{repo['name']}")
+        print(f"Stars: {details['stargazerCount']}")
+        print(f"Repository Age: {details['createdAt']}")
+        print(f"Last Updated: {details['updatedAt']}")
+        print(f"Primary Language: {primary_language}")
+        print(f"Releases: {details['releases']['totalCount']}")
+        print(f"Open Issues: {open_issues}")
+        print(f"Closed Issues: {closed_issues}")
+        print(f"Closed Issues Ratio: {closed_ratio:.2f}")
+        print(f"Merged Pull Requests: {details['pullRequests']['totalCount']}")
         print("-" * 40)
 
 if __name__ == "__main__":
-    keyword = "stars:>1"
-    repos = get_popular_repositories(keyword, 100)
-    if repos:
-        print(f"Coletando dados de {len(repos)} repositórios...")
-        collect_and_print_repo_data(repos)
-    else:
-        print("Nenhum repositório encontrado.")
+    start_time = time.time()
+    collect_and_print_repo_data()
+    print(f"Tempo total de execução: {time.time() - start_time:.2f} segundos")
