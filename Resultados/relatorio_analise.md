@@ -55,6 +55,8 @@ A análise utilizou valores medianos para reduzir o impacto de outliers.
 - **Razão de issues fechadas (mediana)**: 0.87
 - **Resultado**: Alto percentual de resolução de issues
 
+[![Gráfico de Análise dos 100 Repositórios](github_analysis_chart.png){width=200px}](github_analysis_chart.png)
+[![Gráfico de Análise dos 1000 Repositórios](github_1000_analysis_chart.png){width=200px}](github_1000_analysis_chart.png)
 ## 4. DISCUSSÃO
 
 ### Confirmação das Hipóteses:
